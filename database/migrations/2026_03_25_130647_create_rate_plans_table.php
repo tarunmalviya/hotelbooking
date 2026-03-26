@@ -11,12 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-         Schema::create('discounts', function (Blueprint $table) {
+        Schema::create('rate_plans', function (Blueprint $table) {
         $table->id();
-       $table->string('type');
-        $table->integer('value'); // percentage
-        $table->integer('min_days')->nullable();
-        $table->integer('days_before_checkin')->nullable();
+        $table->foreignId('room_type_id')->constrained()->cascadeOnDelete();
+        $table->string('name'); // EP, CP, MAP
+        $table->string('meal_plan'); // room_only, breakfast, all_meals
         $table->timestamps();
     });
     }
@@ -26,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('discounts');
+        Schema::dropIfExists('rate_plans');
     }
 };

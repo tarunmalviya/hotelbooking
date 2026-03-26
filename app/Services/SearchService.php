@@ -22,32 +22,36 @@ class SearchService
 
         foreach ($roomTypes as $room) {
 
-            // Skip if guests exceed capacity
-            if ($data['guests'] > $room->capacity) {
-                continue;
-            }
+    if ($data['guests'] > $room->max_occupancy) {
+        continue;
+    }
 
-            $isAvailable = $this->checkAvailability($room, $checkIn, $checkOut);
+    foreach ($room->ratePlans as $ratePlan) {
 
-            if ($isAvailable) {
-                $pricing = $this->calculatePrice($room, $checkIn, $checkOut, $days, $data['meal_plan']);
-            } else {
-                $pricing = [
-                    'base_price' => 0,
-                    'final_price' => 0,
-                    'discounts' => []
-                ];
-            }
+        $isAvailable = $this->checkAvailability($room, $checkIn, $checkOut);
 
-            $results[] = [
-                'room_type' => $room->name,
-                'available' => $isAvailable,
-                'base_price' => $pricing['base_price'],
-                'final_price' => $pricing['final_price'],
-                'price_per_night' => $days ? round($pricing['final_price'] / $days) : 0,
-                'discounts' => $pricing['discounts']
+        if ($isAvailable) {
+            $pricing = $this->calculatePrice($room, $ratePlan, $checkIn, $checkOut, $days);
+        } else {
+            $pricing = [
+                'base_price' => 0,
+                'final_price' => 0,
+                'discounts' => []
             ];
         }
+
+        $results[] = [
+            'room_type' => $room->name,
+            'rate_plan' => $ratePlan->name,
+            'meal_plan' => $ratePlan->meal_plan,
+            'available' => $isAvailable,
+            'base_price' => $pricing['base_price'],
+            'final_price' => $pricing['final_price'],
+            'price_per_night' => $pricing['price_per_night'] ?? 0, // ✅ FIX
+            'discounts' => $pricing['discounts']
+        ];
+    }
+}
 
         return $results;
     }
@@ -75,59 +79,53 @@ class SearchService
         return true;
     }
 
-    private function calculatePrice($room, $checkIn, $checkOut, $days, $mealPlan)
-    {
-        $dates = CarbonPeriod::create($checkIn, $checkOut->copy()->subDay());
+    private function calculatePrice($room, $ratePlan, $checkIn, $checkOut, $days)
+{
+    $dates = \Carbon\CarbonPeriod::create($checkIn, $checkOut->copy()->subDay());
 
-        $total = 0;
+    $total = 0;
 
-        foreach ($dates as $date) {
-            $inventory = Inventory::where('room_type_id', $room->id)
-                ->whereDate('date', $date)
-                ->first();
+    foreach ($dates as $date) {
+        $inventory = Inventory::where('room_type_id', $room->id)
+            ->whereDate('date', $date)
+            ->first();
 
-            $total += $inventory->price ?? 0;
-        }
-
-        $basePrice = $total;
-
-        // Meal Plan Cost
-        if ($mealPlan === 'breakfast') {
-            $total += 500 * $days;
-        }
-
-        $discountsApplied = [];
-
-        // Long Stay Discount
-        $longStay = Discount::where('type', 'long_stay')->first();
-        if ($longStay && $days >= $longStay->min_days) {
-            $discount = ($total * $longStay->value) / 100;
-            $total -= $discount;
-
-            $discountsApplied[] = [
-                'type' => 'long_stay',
-                'amount' => round($discount)
-            ];
-        }
-
-        // Last Minute Discount
-        $lastMinute = Discount::where('type', 'last_minute')->first();
-        $daysBefore = now()->diffInDays($checkIn, false);
-
-        if ($lastMinute && $daysBefore <= $lastMinute->days_before_checkin) {
-            $discount = ($total * $lastMinute->value) / 100;
-            $total -= $discount;
-
-            $discountsApplied[] = [
-                'type' => 'last_minute',
-                'amount' => round($discount)
-            ];
-        }
-
-        return [
-            'base_price' => round($basePrice),
-            'final_price' => round($total),
-            'discounts' => $discountsApplied
-        ];
+        $total += $inventory->price ?? 0;
     }
+
+    $basePrice = $total;
+
+    // Meal Plan Pricing
+    if ($ratePlan->meal_plan === 'breakfast') {
+        $total += 500 * $days;
+    }
+
+    if ($ratePlan->meal_plan === 'all_meals') {
+        $total += 1000 * $days;
+    }
+
+    $discountsApplied = [];
+
+    $daysBefore = now()->diffInDays($checkIn);
+
+    foreach ($ratePlan->discounts as $discount) {
+
+        if ($daysBefore >= $discount->days_before_checkin) {
+            $amount = ($total * $discount->value) / 100;
+            $total -= $amount;
+
+            $discountsApplied[] = [
+                'type' => $discount->type,
+                'amount' => round($amount)
+            ];
+        }
+    }
+
+    return [
+    'base_price' => round($basePrice),
+    'final_price' => round($total),
+    'price_per_night' => round($total / $days), // ✅ ADD THIS
+    'discounts' => $discountsApplied
+];
+}
 }

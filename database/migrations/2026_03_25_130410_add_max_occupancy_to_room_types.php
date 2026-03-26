@@ -11,13 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-         Schema::create('discounts', function (Blueprint $table) {
-        $table->id();
-       $table->string('type');
-        $table->integer('value'); // percentage
-        $table->integer('min_days')->nullable();
-        $table->integer('days_before_checkin')->nullable();
-        $table->timestamps();
+        Schema::table('room_types', function (Blueprint $table) {
+        $table->integer('max_occupancy')->default(3);
     });
     }
 
@@ -26,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('discounts');
+        Schema::table('room_types', function (Blueprint $table) {
+            //
+        });
     }
 };

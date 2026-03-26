@@ -17,15 +17,16 @@ public function run()
     // Create Room Types
     $standard = RoomType::create([
         'name' => 'Standard',
-        'capacity' => 3,
+        'max_occupancy' => 3,
         'total_rooms' => 5
     ]);
 
     $deluxe = RoomType::create([
         'name' => 'Deluxe',
-        'capacity' => 3,
+        'max_occupancy' => 4,
         'total_rooms' => 5
     ]);
+    
 
     // Create Inventory for next 30 days
     for ($i = 0; $i < 30; $i++) {
